@@ -10,6 +10,7 @@
     "prettier:check": "prettier --check .",
     "format": "npm run prettier && npm run lint:fix",
     "test:unit": "jest --config jest.config.js",
+    "test": "NODE_ENV=test jest --runInBand --detectOpenHandles",
     "test:ci": "jest --coverage --forceExit",
     "test:integration": "jest --config jest.integration.config.js"
   },

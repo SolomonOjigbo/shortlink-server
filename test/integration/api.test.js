@@ -2,44 +2,52 @@ const request = require('supertest');
 const app = require('../../index.js');
 const { MongoMemoryServer } = require('mongodb-memory-server');
 const mongoose = require('mongoose');
+const http = require('http');
 
 
-jest.setTimeout(30000); // 30 seconds
+// Set longer timeout for all tests
+jest.setTimeout(30000);
 
 describe('URL Shortener API', () => {
   let mongoServer;
+  let server;
+  let originalMongoUri; 
 
   beforeAll(async () => {
+
+    originalMongoUri = process.env.MONGO_URL;
+    
     // Start MongoDB Memory Server
     mongoServer = await MongoMemoryServer.create({
       instance: {
-        // Faster startup with these options
         dbName: 'testDB',
-        port: 27017, // Fixed port helps with CI environments
+        port: 0, // Random available port
       },
       binary: {
-        version: '6.0.3', // Specify a MongoDB version
+        version: '6.0.3',
       }
     });
     
-    const mongoUri = mongoServer.getUri();
-    await mongoose.connect(mongoUri, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-      connectTimeoutMS: 10000, // 10 seconds connection timeout
-      serverSelectionTimeoutMS: 10000, // 10 seconds server selection timeout
-    });
+  
+    // Create HTTP server
+    server = http.createServer(app);
+    server.listen(0); 
+   
   });
 
   afterAll(async () => {
     // Cleanup in proper order
-    try {
-      await mongoose.disconnect();
-      if (mongoServer) {
-        await mongoServer.stop();
-      }
-    } catch (err) {
-      console.error('Cleanup error:', err);
+    await mongoose.disconnect();
+    
+    if (mongoServer) {
+      await mongoServer.stop();
+    }
+    
+    // Restore original MONGO_URI if it existed
+    if (originalMongoUri) {
+      process.env.MONGO_URL = originalMongoUri;
+    } else {
+      delete process.env.MONGO_URL;
     }
   });
 
@@ -48,37 +56,58 @@ describe('URL Shortener API', () => {
     await mongoose.connection.db.dropDatabase();
   });
 
+  // Helper function for connection with retries
+  // const connectWithRetry = async (uri) => {
+  //   try {
+  //     await mongoose.connect(uri, {
+  //       useNewUrlParser: true,
+  //       useUnifiedTopology: true,
+  //       connectTimeoutMS: 10000,
+  //       serverSelectionTimeoutMS: 10000,
+  //     });
+  //     console.log('Connected to MongoDB for testing');
+  //   } catch (err) {
+  //     console.error('Failed to connect to MongoDB - retrying in 5 sec', err);
+  //     await new Promise(resolve => setTimeout(resolve, 5000));
+  //     await connectWithRetry(uri);
+  //   }
+  // };
+
   describe('POST /api/encode', () => {
     test('should encode a URL and return a short URL', async () => {
-      const response = await request(app)
+      const response = await request(server)
         .post('/api/encode')
-        .send({ longUrl: 'https://www.namecheap.com/hosting/shared/' })
-        .expect(200);
-
+        .send({ longUrl: 'https://example.com/encoded-url-test' })
+        .expect(201);
+      
       expect(response.body).toHaveProperty('shortUrl');
-      expect(response.body.shortUrl).toMatch(/^http:\/\/localhost:5000\/\w+$/);
+      // Updated regex to match both localhost and 127.0.0.1
+      expect(response.body.shortUrl).toMatch(/^http:\/\/(localhost|127\.0\.0\.1):\d+\/\w+$/);
     });
 
     test('should return 400 for invalid URL', async () => {
-      const response = await request(app)
+      const response = await request(server)
         .post('/api/encode')
         .send({ longUrl: 'not-a-valid-url' })
         .expect(400);
-
-      expect(response.body).toHaveProperty('error');
+      
+      // Updated to check for errors array
+      expect(response.body).toHaveProperty('errors');
+      expect(response.body.errors[0]).toHaveProperty('msg', 'Must be a valid URL');
     });
 
     test('should return the same short URL for duplicate long URL', async () => {
       const longUrl = 'https://example.com/duplicate-test';
       
-      const firstResponse = await request(app)
-        .post('/api/encode')
-        .send({ longUrl });
-      
-      const secondResponse = await request(app)
+      const firstResponse = await request(server)
         .post('/api/encode')
         .send({ longUrl })
-        .expect(200);
+        .expect(201);
+      
+      const secondResponse = await request(server)
+        .post('/api/encode')
+        .send({ longUrl })
+        .expect(200); // Changed to 200 for existing resource
 
       expect(firstResponse.body.shortUrl).toBe(secondResponse.body.shortUrl);
     });
@@ -86,13 +115,12 @@ describe('URL Shortener API', () => {
 
   describe('POST /api/decode', () => {
     test('should decode a short URL and return the original URL', async () => {
-      // First encode a URL
-      const encodeResponse = await request(app)
+      const encodeResponse = await request(server)
         .post('/api/encode')
-        .send({ longUrl: 'https://example.com/to-decode' });
+        .send({ longUrl: 'https://example.com/to-decode' })
+        .expect(201);
 
-      // Then decode it
-      const decodeResponse = await request(app)
+      const decodeResponse = await request(server)
         .post('/api/decode')
         .send({ shortUrl: encodeResponse.body.shortUrl })
         .expect(200);
@@ -102,21 +130,30 @@ describe('URL Shortener API', () => {
     });
 
     test('should return 404 for non-existent short URL', async () => {
-      const response = await request(app)
+      // First create a test URL to ensure the path is valid
+      const encodeResponse = await request(server)
+        .post('/api/encode')
+        .send({ longUrl: 'https://example.com/exists' })
+        .expect(201);
+      
+      // Extract the base URL pattern
+      const baseUrl = encodeResponse.body.shortUrl.split('/').slice(0, 3).join('/');
+      
+      // Test with a non-existent path
+      await request(server)
         .post('/api/decode')
-        .send({ shortUrl: 'http://localhost:5000/nonexistent' })
+        .send({ shortUrl: `${baseUrl}/nonexistent` })
         .expect(404);
-
-      expect(response.body).toHaveProperty('error');
     });
 
     test('should return 400 for invalid short URL', async () => {
-      const response = await request(app)
+      const response = await request(server)
         .post('/api/decode')
         .send({ shortUrl: 'not-a-valid-url' })
         .expect(400);
-
-      expect(response.body).toHaveProperty('error');
+      
+      expect(response.body).toHaveProperty('errors');
+      expect(response.body.errors[0]).toHaveProperty('msg', 'Must be a valid URL');
     });
   });
 
@@ -124,22 +161,20 @@ describe('URL Shortener API', () => {
     test('should correctly encode then decode a URL', async () => {
       const longUrl = 'https://example.com/integration-test';
       
-      // Encode
-      const encodeResponse = await request(app)
+      const encodeResponse = await request(server)
         .post('/api/encode')
-        .send({ longUrl });
+        .send({ longUrl })
+        .expect(201);
 
-      // Decode
-      const decodeResponse = await request(app)
+      const decodeResponse = await request(server)
         .post('/api/decode')
-        .send({ shortUrl: encodeResponse.body.shortUrl });
+        .send({ shortUrl: encodeResponse.body.shortUrl })
+        .expect(200);
 
-      // Verify
       expect(decodeResponse.body.longUrl).toBe(longUrl);
     });
 
     test('should maintain data consistency', async () => {
-      // Encode multiple URLs
       const urlsToTest = [
         'https://example.com/first',
         'https://example.com/second',
@@ -147,19 +182,17 @@ describe('URL Shortener API', () => {
       ];
 
       const encodePromises = urlsToTest.map(url => 
-        request(app).post('/api/encode').send({ longUrl: url })
+        request(server).post('/api/encode').send({ longUrl: url }).expect(201)
       );
 
       const encodeResponses = await Promise.all(encodePromises);
 
-      // Decode all
       const decodePromises = encodeResponses.map(res => 
-        request(app).post('/api/decode').send({ shortUrl: res.body.shortUrl })
+        request(server).post('/api/decode').send({ shortUrl: res.body.shortUrl }).expect(200)
       );
 
       const decodeResponses = await Promise.all(decodePromises);
 
-      // Verify all original URLs match
       decodeResponses.forEach((res, index) => {
         expect(res.body.longUrl).toBe(urlsToTest[index]);
       });

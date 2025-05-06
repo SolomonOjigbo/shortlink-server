@@ -47,30 +47,26 @@ exports.encodeUrl = async (req, res) => {
 
 // Decode (get original URL)
 exports.decodeUrl = async (req, res) => {
-  try {
-    // Validate input
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
 
+  try {
     const { shortUrl } = req.body;
-    
-    // Extract urlPath from shortUrl
+   
     const urlPath = shortUrl.split('/').pop();
-    const url = await Url.findOne({ urlPath });
     
+    const url = await Url.findOne({ urlPath });
     if (!url) {
       return res.status(404).json({ error: 'URL not found' });
     }
     
-    res.json({ longUrl: url.longUrl });
+    res.status(200).json({ longUrl: url.longUrl });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ error: 'Server error' });
   }
 };
-
 // Redirect to original URL
 exports.redirectUrl = async (req, res) => {
   try {
