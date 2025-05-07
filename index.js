@@ -25,7 +25,12 @@ app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 app.use(express.json());
 
-app.use('/', urlRoutes);
+app.use('/api', urlRoutes);
+
+app.get('/', (req, res) => {
+  res.send('URL Shortener API is running');
+});
+
 
 // Error handling middleware for CORS
 app.use((err, req, res, next) => {
