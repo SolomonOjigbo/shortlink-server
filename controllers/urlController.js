@@ -82,7 +82,7 @@ exports.redirectUrl = async (req, res) => {
     url.lastAccessed = new Date();
     await url.save();
     
-    res.redirect(url.longUrl);
+    return res.redirect(url.longUrl);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });
