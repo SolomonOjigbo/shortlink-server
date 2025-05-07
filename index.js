@@ -11,18 +11,16 @@ connectDB();
 
 
 const corsOptions = {
-    origin: 'https://shortlink-ecru.vercel.app',
+    origin: '*', 
     methods: ['GET', 'POST', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: false, 
     optionsSuccessStatus: 200
   };
 
-// app.use(cors());
-
 app.use(cors(corsOptions));
 
-// app.options('*', cors(corsOptions));
+app.options('/{*any}', cors(corsOptions));
 app.use(express.json());
 
 app.use('/api', urlRoutes);
@@ -30,9 +28,6 @@ app.use('/api', urlRoutes);
 app.get('/', (req, res) => {
   res.send('URL Shortener API is running');
 });
-
-
-app.all('/{*any}', (req, res, next) => {});
 
 // Error handling middleware for CORS
 app.use((err, req, res, next) => {
