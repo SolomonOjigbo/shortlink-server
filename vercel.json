@@ -6,7 +6,7 @@
         "headers": [
           {
             "key": "Access-Control-Allow-Origin",
-            "value": "https://shortlink-ecru.vercel.app"
+            "value": "https://shortlink-ecru.vercel.app/"
           },
           {
             "key": "Access-Control-Allow-Methods",

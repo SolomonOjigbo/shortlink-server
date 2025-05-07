@@ -22,7 +22,7 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-app.options('*', cors(corsOptions));
+// app.options('*', cors(corsOptions));
 app.use(express.json());
 
 app.use('/api', urlRoutes);
@@ -31,6 +31,8 @@ app.get('/', (req, res) => {
   res.send('URL Shortener API is running');
 });
 
+
+app.all('/{*any}', (req, res, next) => {});
 
 // Error handling middleware for CORS
 app.use((err, req, res, next) => {
@@ -43,8 +45,8 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 5000;
 
-if (process.env.NODE_ENV !== 'test') {
+
   app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-}
+
 
 module.exports = app;
