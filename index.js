@@ -9,26 +9,21 @@ const app = express();
 // Connect to database
 connectDB();
 
-app.use(cors());
-app.use(express.json());
 
 const corsOptions = {
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: [
-    'Content-Type',
-    'Authorization',
-    'X-Requested-With',
-    'Accept'
-  ],
-  preflightContinue: false,
-  optionsSuccessStatus: 204
-};
+    origin: 'https://shortlink-ecru.vercel.app',
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: false, 
+    optionsSuccessStatus: 200
+  };
 
+// app.use(cors());
 
 app.use(cors(corsOptions));
 
 app.options('*', cors(corsOptions));
+app.use(express.json());
 
 app.use('/', urlRoutes);
 
